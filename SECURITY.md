@@ -15,6 +15,7 @@ The following areas are in scope for security reports against this project:
 - Tool input validation (date strings, event IDs, calendar names passed to the Swift binary)
 - JSON output construction in the Swift binary
 - EventKit data access and exposure (calendar data, event notes)
+- Write gate (`ICAL_ALLOW_WRITE`) bypass
 - MCP transport security (stdio)
 
 ## Out of Scope / Upstream
@@ -28,9 +29,10 @@ The following should be reported to their respective maintainers:
 
 ## Data Handling
 
-This server accesses **all calendars** on the host system by default. Event notes are included
-in responses and may contain sensitive information. Write operations (create, update, delete)
-are available through the MCP tools.
+This server accesses **all calendars** on the host system by default. Event notes are opt-in
+per-request (`include_notes: true`) and may contain sensitive information. Write operations
+(create, update, delete) are gated behind the `ICAL_ALLOW_WRITE=true` environment variable
+(off by default).
 
 Users should be mindful of this when granting calendar access and when connecting the server
 to an MCP client.
