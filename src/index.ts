@@ -33,11 +33,12 @@ server.tool(
   "ical__list_events",
   "List calendar events within a date range",
   {
-    start_date: z.string().describe("Start date (YYYY-MM-DD)"),
-    end_date: z.string().optional().describe("End date (YYYY-MM-DD, defaults to start_date)"),
+    start_date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).describe("Start date (YYYY-MM-DD)"),
+    end_date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional().describe("End date (YYYY-MM-DD, defaults to start_date)"),
+    calendar: z.string().optional().describe("Calendar name to filter (default: all calendars)"),
   },
-  async ({ start_date, end_date }) => ({
-    content: [{ type: "text", text: run("list-events", start_date, end_date ?? "") }],
+  async ({ start_date, end_date, calendar }) => ({
+    content: [{ type: "text", text: run("list-events", start_date, end_date ?? "", calendar ?? "") }],
   })
 );
 
@@ -46,10 +47,11 @@ server.tool(
   "Search calendar events by keyword",
   {
     query: z.string().describe("Search keyword"),
-    days_ahead: z.number().optional().describe("Number of days ahead to search (default 30)"),
+    days_ahead: z.number().int().min(1).max(365).optional().describe("Number of days ahead to search (default 30, max 365)"),
+    calendar: z.string().optional().describe("Calendar name to filter (default: all calendars)"),
   },
-  async ({ query, days_ahead }) => ({
-    content: [{ type: "text", text: run("search", query, String(days_ahead ?? 30)) }],
+  async ({ query, days_ahead, calendar }) => ({
+    content: [{ type: "text", text: run("search", query, String(days_ahead ?? 30), calendar ?? "") }],
   })
 );
 
@@ -58,8 +60,8 @@ server.tool(
   "Create a new calendar event",
   {
     title: z.string().describe("Event title"),
-    start: z.string().describe("Start datetime (ISO 8601, e.g. 2026-05-01T10:00:00Z)"),
-    end: z.string().describe("End datetime (ISO 8601)"),
+    start: z.string().regex(/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}/).describe("Start datetime (ISO 8601, e.g. 2026-05-01T10:00:00Z)"),
+    end: z.string().regex(/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}/).describe("End datetime (ISO 8601)"),
     calendar: z.string().optional().describe("Calendar name (default: default calendar)"),
     location: z.string().optional().describe("Event location"),
     notes: z.string().optional().describe("Event notes"),
@@ -79,8 +81,8 @@ server.tool(
   {
     event_id: z.string().describe("Event UID"),
     title: z.string().optional().describe("New title"),
-    start: z.string().optional().describe("New start datetime (ISO 8601)"),
-    end: z.string().optional().describe("New end datetime (ISO 8601)"),
+    start: z.string().regex(/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}/).optional().describe("New start datetime (ISO 8601)"),
+    end: z.string().regex(/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}/).optional().describe("New end datetime (ISO 8601)"),
     location: z.string().optional().describe("New location"),
     notes: z.string().optional().describe("New notes"),
   },

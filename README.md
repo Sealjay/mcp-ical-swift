@@ -110,6 +110,22 @@ The Swift binary is compiled once (`bun run build`) and called synchronously for
 
 The key insight: `swiftc`-compiled binaries are Apple-signed and inherit Calendar TCC from the system toolchain. This bypasses the TCC restrictions that block Node, Bun, Python, and AppleScript from accessing calendars in headless contexts.
 
+## Privacy and security
+
+- This server accesses **all calendars** on the system by default (iCloud, Exchange, local, shared, subscribed). You can filter by calendar name per-request using the optional `calendar` parameter on `list_events` and `search_events`.
+- Event notes are returned in responses and may contain sensitive data (meeting PINs, passwords, personal details). Consider this when granting MCP client access.
+- Write operations (`create_event`, `update_event`, `delete_event`) are available with no confirmation step. An MCP client (or a prompt injection within one) could modify your calendar data.
+- All communication is local over stdio -- no data is sent to external services.
+- To report a vulnerability, see [SECURITY.md](SECURITY.md).
+
+## Limitations
+
+- macOS only (requires EventKit and the Swift toolchain)
+- Requires Bun runtime
+- The Swift binary is compiled once and called synchronously per tool invocation -- not suitable for very high-throughput use
+- Recurring event modifications apply to the single instance only (`.thisEvent` span)
+- Calendar access depends on macOS TCC granting permission to the compiled binary
+
 ## Troubleshooting
 
 ### "Calendar access is not granted"
