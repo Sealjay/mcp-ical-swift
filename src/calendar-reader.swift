@@ -5,8 +5,31 @@ let store = EKEventStore()
 let args = CommandLine.arguments
 
 func printJSON(_ dict: [String: Any]) {
-    let data = try! JSONSerialization.data(withJSONObject: dict)
-    print(String(data: data, encoding: .utf8)!)
+    do {
+        let data = try JSONSerialization.data(withJSONObject: dict)
+        guard let str = String(data: data, encoding: .utf8) else {
+            fputs("{\"error\":\"Failed to encode JSON as UTF-8\"}\n", stderr)
+            exit(1)
+        }
+        print(str)
+    } catch {
+        fputs("{\"error\":\"JSON serialisation failed: \(error.localizedDescription)\"}\n", stderr)
+        exit(1)
+    }
+}
+
+func printJSONArray(_ array: [[String: Any]]) {
+    do {
+        let data = try JSONSerialization.data(withJSONObject: array)
+        guard let str = String(data: data, encoding: .utf8) else {
+            fputs("{\"error\":\"Failed to encode JSON as UTF-8\"}\n", stderr)
+            exit(1)
+        }
+        print(str)
+    } catch {
+        fputs("{\"error\":\"JSON serialisation failed: \(error.localizedDescription)\"}\n", stderr)
+        exit(1)
+    }
 }
 
 guard args.count >= 2 else {
@@ -27,12 +50,11 @@ case "list-calendars":
             "type": String(describing: cal.type.rawValue)
         ])
     }
-    let data = try! JSONSerialization.data(withJSONObject: result)
-    print(String(data: data, encoding: .utf8)!)
+    printJSONArray(result as [[String: Any]])
 
 case "list-events":
     guard args.count >= 3 else {
-        printJSON(["error": "Usage: calendar-reader list-events <date> [end-date] [calendar-name]"])
+        printJSON(["error": "Usage: calendar-reader list-events <date> [end-date] [calendar-name] [include-notes]"])
         exit(1)
     }
     let df = ISO8601DateFormatter()
@@ -47,7 +69,18 @@ case "list-events":
     }
 
     var endDate = df.date(from: endStr) ?? startDate
-    endDate = Calendar.current.date(byAdding: .day, value: 1, to: endDate)!
+    guard let endDatePlusOne = Calendar.current.date(byAdding: .day, value: 1, to: endDate) else {
+        printJSON(["error": "Failed to calculate end date"])
+        exit(1)
+    }
+    endDate = endDatePlusOne
+
+    // Cap date range at 90 days
+    let daysBetween = Calendar.current.dateComponents([.day], from: startDate, to: endDate).day ?? 0
+    if daysBetween > 90 {
+        printJSON(["error": "Date range exceeds 90-day maximum. Requested \(daysBetween) days."])
+        exit(1)
+    }
 
     var cals: [EKCalendar]? = nil
     if args.count >= 5 && !args[4].isEmpty {
@@ -59,6 +92,8 @@ case "list-events":
             exit(1)
         }
     }
+
+    let includeNotes = args.count >= 6 && args[5] == "true"
 
     let predicate = store.predicateForEvents(withStart: startDate, end: endDate, calendars: cals)
     let events = store.events(matching: predicate)
@@ -75,22 +110,24 @@ case "list-events":
         ]
         if let uid = event.eventIdentifier { dict["uid"] = uid }
         if let location = event.location { dict["location"] = location }
-        if let notes = event.notes { dict["notes"] = notes }
+        if includeNotes, let notes = event.notes { dict["notes"] = notes }
         result.append(dict)
     }
-    let data = try! JSONSerialization.data(withJSONObject: result)
-    print(String(data: data, encoding: .utf8)!)
+    printJSONArray(result)
 
 case "search":
     guard args.count >= 3 else {
-        printJSON(["error": "Usage: calendar-reader search <query> [days-ahead] [calendar-name]"])
+        printJSON(["error": "Usage: calendar-reader search <query> [days-ahead] [calendar-name] [include-notes]"])
         exit(1)
     }
     let query = args[2].lowercased()
     let daysAhead = args.count >= 4 ? (Int(args[3]) ?? 30) : 30
 
     let start = Calendar.current.startOfDay(for: Date())
-    let end = Calendar.current.date(byAdding: .day, value: daysAhead, to: start)!
+    guard let end = Calendar.current.date(byAdding: .day, value: daysAhead, to: start) else {
+        printJSON(["error": "Failed to calculate end date"])
+        exit(1)
+    }
 
     var cals: [EKCalendar]? = nil
     if args.count >= 5 && !args[4].isEmpty {
@@ -102,6 +139,8 @@ case "search":
             exit(1)
         }
     }
+
+    let includeNotesInSearch = args.count >= 6 && args[5] == "true"
 
     let predicate = store.predicateForEvents(withStart: start, end: end, calendars: cals)
     let events = store.events(matching: predicate)
@@ -121,11 +160,11 @@ case "search":
             ]
             if let uid = event.eventIdentifier { dict["uid"] = uid }
             if let location = event.location { dict["location"] = location }
+            if includeNotesInSearch, let notes = event.notes { dict["notes"] = notes }
             result.append(dict)
         }
     }
-    let data = try! JSONSerialization.data(withJSONObject: result)
-    print(String(data: data, encoding: .utf8)!)
+    printJSONArray(result)
 
 case "create-event":
     guard args.count >= 5 else {
@@ -176,9 +215,7 @@ case "create-event":
 
     do {
         try store.save(event, span: .thisEvent)
-        let result: [String: Any] = ["uid": event.eventIdentifier ?? "", "title": title, "status": "created"]
-        let data = try! JSONSerialization.data(withJSONObject: result)
-        print(String(data: data, encoding: .utf8)!)
+        printJSON(["uid": event.eventIdentifier ?? "", "title": title, "status": "created"])
     } catch {
         printJSON(["error": "Failed to create event: \(error.localizedDescription)"])
         exit(1)
@@ -206,9 +243,7 @@ case "update-event":
 
     do {
         try store.save(event, span: .thisEvent)
-        let result: [String: Any] = ["uid": event.eventIdentifier ?? "", "title": event.title ?? "", "status": "updated"]
-        let data = try! JSONSerialization.data(withJSONObject: result)
-        print(String(data: data, encoding: .utf8)!)
+        printJSON(["uid": event.eventIdentifier ?? "", "title": event.title ?? "", "status": "updated"])
     } catch {
         printJSON(["error": "Failed to update event: \(error.localizedDescription)"])
         exit(1)
@@ -239,8 +274,7 @@ case "get-event":
     if event.hasRecurrenceRules, let _ = event.recurrenceRules {
         dict["hasRecurrence"] = true
     }
-    let data = try! JSONSerialization.data(withJSONObject: dict)
-    print(String(data: data, encoding: .utf8)!)
+    printJSON(dict)
 
 case "delete-event":
     guard args.count >= 3 else {
