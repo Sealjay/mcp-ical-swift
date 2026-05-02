@@ -13,6 +13,16 @@ if (!existsSync(BINARY)) {
 	);
 }
 
+export const WRITE_ENABLED = process.env.ICAL_ALLOW_WRITE === "true";
+
+export function assertWriteEnabled(): void {
+	if (!WRITE_ENABLED) {
+		throw new Error(
+			"Write operations are disabled. Set the ICAL_ALLOW_WRITE=true environment variable to enable create, update, and delete.",
+		);
+	}
+}
+
 function run(command: string, ...args: string[]): string {
 	try {
 		return execFileSync(BINARY, [command, ...args], {
@@ -132,7 +142,7 @@ server.tool(
 
 server.tool(
 	"ical__create_event",
-	"Create a new calendar event",
+	"Create a new calendar event. Requires ICAL_ALLOW_WRITE=true environment variable.",
 	{
 		title: z.string().max(500).describe("Event title"),
 		start: z
@@ -154,28 +164,31 @@ server.tool(
 		notes: z.string().max(5000).optional().describe("Event notes"),
 		all_day: z.boolean().optional().describe("All-day event"),
 	},
-	async ({ title, start, end, calendar, location, notes, all_day }) => ({
-		content: [
-			{
-				type: "text",
-				text: run(
-					"create-event",
-					title,
-					start,
-					end,
-					calendar ?? "",
-					location ?? "",
-					notes ?? "",
-					all_day ? "true" : "",
-				),
-			},
-		],
-	}),
+	async ({ title, start, end, calendar, location, notes, all_day }) => {
+		assertWriteEnabled();
+		return {
+			content: [
+				{
+					type: "text",
+					text: run(
+						"create-event",
+						title,
+						start,
+						end,
+						calendar ?? "",
+						location ?? "",
+						notes ?? "",
+						all_day ? "true" : "",
+					),
+				},
+			],
+		};
+	},
 );
 
 server.tool(
 	"ical__update_event",
-	"Update an existing calendar event",
+	"Update an existing calendar event. Requires ICAL_ALLOW_WRITE=true environment variable.",
 	{
 		event_id: z.string().max(200).describe("Event UID"),
 		title: z.string().max(500).optional().describe("New title"),
@@ -194,22 +207,25 @@ server.tool(
 		location: z.string().max(500).optional().describe("New location"),
 		notes: z.string().max(5000).optional().describe("New notes"),
 	},
-	async ({ event_id, title, start, end, location, notes }) => ({
-		content: [
-			{
-				type: "text",
-				text: run(
-					"update-event",
-					event_id,
-					title ?? "",
-					start ?? "",
-					end ?? "",
-					location ?? "",
-					notes ?? "",
-				),
-			},
-		],
-	}),
+	async ({ event_id, title, start, end, location, notes }) => {
+		assertWriteEnabled();
+		return {
+			content: [
+				{
+					type: "text",
+					text: run(
+						"update-event",
+						event_id,
+						title ?? "",
+						start ?? "",
+						end ?? "",
+						location ?? "",
+						notes ?? "",
+					),
+				},
+			],
+		};
+	},
 );
 
 server.tool(
@@ -217,21 +233,36 @@ server.tool(
 	"Get full details of a calendar event by UID",
 	{
 		event_id: z.string().max(200).describe("Event UID"),
+		include_notes: z
+			.boolean()
+			.optional()
+			.default(false)
+			.describe(
+				"Include event notes in output (default: false, to avoid exposing meeting PINs)",
+			),
 	},
-	async ({ event_id }) => ({
-		content: [{ type: "text", text: run("get-event", event_id) }],
+	async ({ event_id, include_notes }) => ({
+		content: [
+			{
+				type: "text",
+				text: run("get-event", event_id, include_notes ? "true" : ""),
+			},
+		],
 	}),
 );
 
 server.tool(
 	"ical__delete_event",
-	"Delete a calendar event",
+	"Delete a calendar event. Requires ICAL_ALLOW_WRITE=true environment variable.",
 	{
 		event_id: z.string().max(200).describe("Event UID"),
 	},
-	async ({ event_id }) => ({
-		content: [{ type: "text", text: run("delete-event", event_id) }],
-	}),
+	async ({ event_id }) => {
+		assertWriteEnabled();
+		return {
+			content: [{ type: "text", text: run("delete-event", event_id) }],
+		};
+	},
 );
 
 const transport = new StdioServerTransport();

@@ -64,7 +64,7 @@ case "list-events":
     let endStr = args.count >= 4 ? args[3] : startStr
 
     guard let startDate = df.date(from: startStr) else {
-        printJSON(["error": "Invalid start date: \(startStr). Use YYYY-MM-DD"])
+        printJSON(["error": "Invalid start date. Use YYYY-MM-DD format"])
         exit(1)
     }
 
@@ -88,7 +88,7 @@ case "list-events":
         if let cal = store.calendars(for: .event).first(where: { $0.title == calName }) {
             cals = [cal]
         } else {
-            printJSON(["error": "Calendar not found: \(calName)"])
+            printJSON(["error": "Calendar not found"])
             exit(1)
         }
     }
@@ -106,7 +106,7 @@ case "list-events":
             "start": isoFormatter.string(from: event.startDate),
             "end": isoFormatter.string(from: event.endDate),
             "allDay": event.isAllDay,
-            "calendar": event.calendar.title
+            "calendar": event.calendar?.title ?? "Unknown"
         ]
         if let uid = event.eventIdentifier { dict["uid"] = uid }
         if let location = event.location { dict["location"] = location }
@@ -121,7 +121,12 @@ case "search":
         exit(1)
     }
     let query = args[2].lowercased()
-    let daysAhead = args.count >= 4 ? (Int(args[3]) ?? 30) : 30
+    let rawDaysAhead = args.count >= 4 ? (Int(args[3]) ?? 30) : 30
+    guard rawDaysAhead >= 1 && rawDaysAhead <= 365 else {
+        printJSON(["error": "days-ahead must be between 1 and 365"])
+        exit(1)
+    }
+    let daysAhead = rawDaysAhead
 
     let start = Calendar.current.startOfDay(for: Date())
     guard let end = Calendar.current.date(byAdding: .day, value: daysAhead, to: start) else {
@@ -135,7 +140,7 @@ case "search":
         if let cal = store.calendars(for: .event).first(where: { $0.title == calName }) {
             cals = [cal]
         } else {
-            printJSON(["error": "Calendar not found: \(calName)"])
+            printJSON(["error": "Calendar not found"])
             exit(1)
         }
     }
@@ -156,7 +161,7 @@ case "search":
                 "title": event.title ?? "",
                 "start": isoFormatter.string(from: event.startDate),
                 "end": isoFormatter.string(from: event.endDate),
-                "calendar": event.calendar.title
+                "calendar": event.calendar?.title ?? "Unknown"
             ]
             if let uid = event.eventIdentifier { dict["uid"] = uid }
             if let location = event.location { dict["location"] = location }
@@ -184,11 +189,11 @@ case "create-event":
     }
 
     guard let startDate = parseDate(args[3]) else {
-        printJSON(["error": "Invalid start date: \(args[3])"])
+        printJSON(["error": "Invalid start date. Use ISO 8601 format"])
         exit(1)
     }
     guard let endDate = parseDate(args[4]) else {
-        printJSON(["error": "Invalid end date: \(args[4])"])
+        printJSON(["error": "Invalid end date. Use ISO 8601 format"])
         exit(1)
     }
 
@@ -202,11 +207,15 @@ case "create-event":
         if let cal = store.calendars(for: .event).first(where: { $0.title == calName }) {
             event.calendar = cal
         } else {
-            printJSON(["error": "Calendar not found: \(calName)"])
+            printJSON(["error": "Calendar not found"])
             exit(1)
         }
     } else {
-        event.calendar = store.defaultCalendarForNewEvents
+        guard let defaultCal = store.defaultCalendarForNewEvents else {
+            printJSON(["error": "No default calendar is configured"])
+            exit(1)
+        }
+        event.calendar = defaultCal
     }
 
     if args.count > 6 && !args[6].isEmpty { event.location = args[6] }
@@ -228,7 +237,7 @@ case "update-event":
     }
     let eventId = args[2]
     guard let event = store.event(withIdentifier: eventId) else {
-        printJSON(["error": "Event not found: \(eventId)"])
+        printJSON(["error": "Event not found"])
         exit(1)
     }
 
@@ -251,14 +260,15 @@ case "update-event":
 
 case "get-event":
     guard args.count >= 3 else {
-        printJSON(["error": "Usage: calendar-reader get-event <event-id>"])
+        printJSON(["error": "Usage: calendar-reader get-event <event-id> [include-notes]"])
         exit(1)
     }
     let eventId = args[2]
     guard let event = store.event(withIdentifier: eventId) else {
-        printJSON(["error": "Event not found: \(eventId)"])
+        printJSON(["error": "Event not found"])
         exit(1)
     }
+    let includeNotes = args.count >= 4 && args[3] == "true"
     let isoFormatter = ISO8601DateFormatter()
     var dict: [String: Any] = [
         "uid": event.eventIdentifier ?? "",
@@ -266,10 +276,10 @@ case "get-event":
         "start": isoFormatter.string(from: event.startDate),
         "end": isoFormatter.string(from: event.endDate),
         "allDay": event.isAllDay,
-        "calendar": event.calendar.title
+        "calendar": event.calendar?.title ?? "Unknown"
     ]
     if let location = event.location { dict["location"] = location }
-    if let notes = event.notes { dict["notes"] = notes }
+    if includeNotes, let notes = event.notes { dict["notes"] = notes }
     if let url = event.url { dict["url"] = url.absoluteString }
     if event.hasRecurrenceRules, let _ = event.recurrenceRules {
         dict["hasRecurrence"] = true
@@ -283,7 +293,7 @@ case "delete-event":
     }
     let eventId = args[2]
     guard let event = store.event(withIdentifier: eventId) else {
-        printJSON(["error": "Event not found: \(eventId)"])
+        printJSON(["error": "Event not found"])
         exit(1)
     }
     do {
@@ -295,6 +305,6 @@ case "delete-event":
     }
 
 default:
-    printJSON(["error": "Unknown command: \(command). Use list-calendars, list-events, search, create-event, update-event, get-event, delete-event"])
+    printJSON(["error": "Unknown command. Use list-calendars, list-events, search, create-event, update-event, get-event, delete-event"])
     exit(1)
 }

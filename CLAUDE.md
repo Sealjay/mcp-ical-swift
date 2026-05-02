@@ -25,6 +25,15 @@ package.json              # Bun project config
 | `bun run build` | Compile Swift binary to `bin/calendar-reader` |
 | `bun run start` | Start the MCP server |
 | `bun run dev` | Start with watch mode |
+| `bun test` | Run unit tests |
+
+## Write gate
+
+Write operations (`create-event`, `update-event`, `delete-event`) are **disabled by default**. Set `ICAL_ALLOW_WRITE=true` in the environment to enable them:
+
+```bash
+ICAL_ALLOW_WRITE=true bun run start
+```
 
 ## Design decisions
 
@@ -36,7 +45,12 @@ package.json              # Bun project config
 
 ## Testing
 
-Manual testing against local Apple Calendar:
+Unit tests (validation logic, write gate, schema bounds):
+```bash
+bun test
+```
+
+Manual integration testing against local Apple Calendar:
 ```bash
 bun run build
 bin/calendar-reader list-calendars

@@ -22,7 +22,8 @@
   "scripts": {
     "build": "swiftc -o bin/calendar-reader src/calendar-reader.swift -framework EventKit",
     "start": "bun run src/index.ts",
-    "dev": "bun run --watch src/index.ts"
+    "dev": "bun run --watch src/index.ts",
+    "test": "bun test"
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "1.29.0",
