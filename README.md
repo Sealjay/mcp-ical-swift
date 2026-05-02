@@ -29,6 +29,14 @@ The compiled Swift binary (`swiftc`) works because it produces an Apple-signed M
 - Delete events
 - Runs entirely locally over stdio -- no network, no API keys, no cloud
 
+## Write operations require `ICAL_ALLOW_WRITE=true`
+
+**Write operations (create, update, delete) are disabled by default.** To enable them, you must set the `ICAL_ALLOW_WRITE=true` environment variable when starting the server. Without this variable, any attempt to create, update, or delete an event will fail with an error.
+
+This is a deliberate safety measure -- an MCP client (or a prompt injection within one) could otherwise modify your calendar data without any gate.
+
+See the [MCP client configuration](#mcp-client-configuration) section below for how to set this in each client.
+
 ## Prerequisites
 
 - macOS Sequoia (26.x) or later
@@ -51,8 +59,16 @@ The `build` script compiles `src/calendar-reader.swift` into `bin/calendar-reade
 
 ### Claude Code
 
+Read-only (default):
+
 ```bash
 claude mcp add --transport stdio ical --scope user -- bun run /absolute/path/to/mcp-ical-swift/src/index.ts
+```
+
+With write operations enabled:
+
+```bash
+claude mcp add --transport stdio ical --scope user -e ICAL_ALLOW_WRITE=true -- bun run /absolute/path/to/mcp-ical-swift/src/index.ts
 ```
 
 ### OpenClaw
@@ -63,12 +79,17 @@ claude mcp add --transport stdio ical --scope user -- bun run /absolute/path/to/
     "servers": {
       "ical": {
         "command": "bun",
-        "args": ["run", "/absolute/path/to/mcp-ical-swift/src/index.ts"]
+        "args": ["run", "/absolute/path/to/mcp-ical-swift/src/index.ts"],
+        "env": {
+          "ICAL_ALLOW_WRITE": "true"
+        }
       }
     }
   }
 }
 ```
+
+Omit the `"env"` block to keep the server read-only.
 
 ### Claude Desktop
 
@@ -79,23 +100,28 @@ Add to `claude_desktop_config.json`:
   "mcpServers": {
     "ical": {
       "command": "bun",
-      "args": ["run", "/absolute/path/to/mcp-ical-swift/src/index.ts"]
+      "args": ["run", "/absolute/path/to/mcp-ical-swift/src/index.ts"],
+      "env": {
+        "ICAL_ALLOW_WRITE": "true"
+      }
     }
   }
 }
 ```
 
+Omit the `"env"` block to keep the server read-only.
+
 ## Tools
 
-| Tool | Description |
-|---|---|
-| `ical__list_calendars` | List all Apple Calendar calendars |
-| `ical__list_events` | List events within a date range (YYYY-MM-DD) |
-| `ical__search_events` | Search events by keyword (default: 30 days ahead) |
-| `ical__create_event` | Create a new event (title, start, end, calendar, location, notes, all-day) |
-| `ical__update_event` | Update an existing event by UID |
-| `ical__get_event` | Get full details of an event by UID |
-| `ical__delete_event` | Delete an event by UID |
+| Tool | Description | Requires `ICAL_ALLOW_WRITE` |
+|---|---|---|
+| `ical__list_calendars` | List all Apple Calendar calendars | No |
+| `ical__list_events` | List events within a date range (YYYY-MM-DD) | No |
+| `ical__search_events` | Search events by keyword (default: 30 days ahead) | No |
+| `ical__create_event` | Create a new event (title, start, end, calendar, location, notes, all-day) | **Yes** |
+| `ical__update_event` | Update an existing event by UID | **Yes** |
+| `ical__get_event` | Get full details of an event by UID | No |
+| `ical__delete_event` | Delete an event by UID | **Yes** |
 
 ## How it works
 
@@ -114,7 +140,7 @@ The key insight: `swiftc`-compiled binaries are Apple-signed and inherit Calenda
 
 - This server accesses **all calendars** on the system by default (iCloud, Exchange, local, shared, subscribed). You can filter by calendar name per-request using the optional `calendar` parameter on `list_events` and `search_events`.
 - Event notes are returned in responses and may contain sensitive data (meeting PINs, passwords, personal details). Consider this when granting MCP client access.
-- Write operations (`create_event`, `update_event`, `delete_event`) are available with no confirmation step. An MCP client (or a prompt injection within one) could modify your calendar data.
+- Write operations (`create_event`, `update_event`, `delete_event`) are **gated behind the `ICAL_ALLOW_WRITE=true` environment variable** and are disabled by default. Even when enabled, there is no per-operation confirmation step -- an MCP client (or a prompt injection within one) could modify your calendar data.
 - All communication is local over stdio -- no data is sent to external services.
 - To report a vulnerability, see [SECURITY.md](SECURITY.md).
 
