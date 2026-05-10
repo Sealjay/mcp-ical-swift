@@ -87,15 +87,16 @@ Add to `~/Library/Application Support/Claude/claude_desktop_config.json`:
 ```json
 {
   "mcpServers": {
-    "ical": {
-      "command": "bun",
-      "args": ["run", "/absolute/path/to/mcp-ical-swift/src/index.ts"]
+    "mcp-ical": {
+      "command": "/opt/homebrew/bin/bun",
+      "args": ["run", "/absolute/path/to/mcp-ical-swift/src/index.ts"],
+      "env": { "ICAL_ALLOW_WRITE": "true" }
     }
   }
 }
 ```
 
-Restart Claude Desktop. You should see `ical` listed as an available integration.
+If you want read-only access, omit the `env` block. Restart Claude Desktop. You should see your configured MCP entry (for example `mcp-ical`) listed as an available integration.
 
 ### Cursor
 
