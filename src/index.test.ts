@@ -1,30 +1,35 @@
-import { describe, test, expect, beforeEach, afterEach } from "bun:test";
+import { describe, test, expect, afterEach } from "bun:test";
 import { z } from "zod";
 
-// --- Regex validation ---
-const DATE_REGEX = /^\d{4}-\d{2}-\d{2}$/;
-const DATETIME_REGEX = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}/;
-
-describe("DATE_REGEX", () => {
+// --- Date/datetime validation ---
+describe("date schema", () => {
+	const schema = z.string().max(30).date();
 	test("accepts valid YYYY-MM-DD dates", () => {
-		expect(DATE_REGEX.test("2026-01-01")).toBe(true);
-		expect(DATE_REGEX.test("2026-12-31")).toBe(true);
+		expect(schema.safeParse("2026-01-01").success).toBe(true);
+		expect(schema.safeParse("2026-12-31").success).toBe(true);
 	});
 	test("rejects non-conforming strings", () => {
-		expect(DATE_REGEX.test("2026-1-1")).toBe(false);
-		expect(DATE_REGEX.test("01-01-2026")).toBe(false);
-		expect(DATE_REGEX.test("not-a-date")).toBe(false);
-		expect(DATE_REGEX.test("2026-01-01T00:00:00")).toBe(false);
+		expect(schema.safeParse("2026-1-1").success).toBe(false);
+		expect(schema.safeParse("01-01-2026").success).toBe(false);
+		expect(schema.safeParse("not-a-date").success).toBe(false);
+		expect(schema.safeParse("2026-01-01T00:00:00").success).toBe(false);
 	});
 });
 
-describe("DATETIME_REGEX", () => {
+describe("datetime schema", () => {
+	const schema = z
+		.string()
+		.max(30)
+		.datetime({ offset: true, local: true });
 	test("accepts valid ISO 8601 datetimes", () => {
-		expect(DATETIME_REGEX.test("2026-05-01T10:00:00Z")).toBe(true);
-		expect(DATETIME_REGEX.test("2026-05-01T10:00:00+01:00")).toBe(true);
+		expect(schema.safeParse("2026-05-01T10:00:00Z").success).toBe(true);
+		expect(schema.safeParse("2026-05-01T10:00:00+01:00").success).toBe(true);
+	});
+	test("accepts naive datetimes without an offset", () => {
+		expect(schema.safeParse("2026-05-01T10:00:00").success).toBe(true);
 	});
 	test("rejects date-only strings", () => {
-		expect(DATETIME_REGEX.test("2026-05-01")).toBe(false);
+		expect(schema.safeParse("2026-05-01").success).toBe(false);
 	});
 });
 
