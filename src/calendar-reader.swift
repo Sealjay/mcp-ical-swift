@@ -3,10 +3,11 @@ import Foundation
 
 let store = EKEventStore()
 let args = CommandLine.arguments
+let outputFormatter = ISO8601DateFormatter()
 
-func printJSON(_ dict: [String: Any]) {
+func printJSON(_ value: Any) {
     do {
-        let data = try JSONSerialization.data(withJSONObject: dict)
+        let data = try JSONSerialization.data(withJSONObject: value)
         guard let str = String(data: data, encoding: .utf8) else {
             fputs("{\"error\":\"Failed to encode JSON as UTF-8\"}\n", stderr)
             exit(1)
@@ -18,18 +19,8 @@ func printJSON(_ dict: [String: Any]) {
     }
 }
 
-func printJSONArray(_ array: [[String: Any]]) {
-    do {
-        let data = try JSONSerialization.data(withJSONObject: array)
-        guard let str = String(data: data, encoding: .utf8) else {
-            fputs("{\"error\":\"Failed to encode JSON as UTF-8\"}\n", stderr)
-            exit(1)
-        }
-        print(str)
-    } catch {
-        fputs("{\"error\":\"JSON serialisation failed: \(error.localizedDescription)\"}\n", stderr)
-        exit(1)
-    }
+func findCalendar(named name: String) -> EKCalendar? {
+    store.calendars(for: .event).first(where: { $0.title == name })
 }
 
 guard args.count >= 2 else {
@@ -47,10 +38,10 @@ case "list-calendars":
         result.append([
             "name": cal.title,
             "uid": cal.calendarIdentifier,
-            "type": String(describing: cal.type.rawValue)
+            "type": String(cal.type.rawValue)
         ])
     }
-    printJSONArray(result as [[String: Any]])
+    printJSON(result)
 
 case "list-events":
     guard args.count >= 3 else {
@@ -85,7 +76,7 @@ case "list-events":
     var cals: [EKCalendar]? = nil
     if args.count >= 5 && !args[4].isEmpty {
         let calName = args[4]
-        if let cal = store.calendars(for: .event).first(where: { $0.title == calName }) {
+        if let cal = findCalendar(named: calName) {
             cals = [cal]
         } else {
             printJSON(["error": "Calendar not found"])
@@ -99,12 +90,11 @@ case "list-events":
     let events = store.events(matching: predicate)
 
     var result: [[String: Any]] = []
-    let isoFormatter = ISO8601DateFormatter()
     for event in events {
         var dict: [String: Any] = [
             "title": event.title ?? "",
-            "start": isoFormatter.string(from: event.startDate),
-            "end": isoFormatter.string(from: event.endDate),
+            "start": outputFormatter.string(from: event.startDate),
+            "end": outputFormatter.string(from: event.endDate),
             "allDay": event.isAllDay,
             "calendar": event.calendar?.title ?? "Unknown"
         ]
@@ -113,7 +103,7 @@ case "list-events":
         if includeNotes, let notes = event.notes { dict["notes"] = notes }
         result.append(dict)
     }
-    printJSONArray(result)
+    printJSON(result)
 
 case "search":
     guard args.count >= 3 else {
@@ -137,7 +127,7 @@ case "search":
     var cals: [EKCalendar]? = nil
     if args.count >= 5 && !args[4].isEmpty {
         let calName = args[4]
-        if let cal = store.calendars(for: .event).first(where: { $0.title == calName }) {
+        if let cal = findCalendar(named: calName) {
             cals = [cal]
         } else {
             printJSON(["error": "Calendar not found"])
@@ -150,7 +140,6 @@ case "search":
     let predicate = store.predicateForEvents(withStart: start, end: end, calendars: cals)
     let events = store.events(matching: predicate)
 
-    let isoFormatter = ISO8601DateFormatter()
     var result: [[String: Any]] = []
     for event in events {
         let title = (event.title ?? "").lowercased()
@@ -159,8 +148,8 @@ case "search":
         if title.contains(query) || location.contains(query) || notes.contains(query) {
             var dict: [String: Any] = [
                 "title": event.title ?? "",
-                "start": isoFormatter.string(from: event.startDate),
-                "end": isoFormatter.string(from: event.endDate),
+                "start": outputFormatter.string(from: event.startDate),
+                "end": outputFormatter.string(from: event.endDate),
                 "calendar": event.calendar?.title ?? "Unknown"
             ]
             if let uid = event.eventIdentifier { dict["uid"] = uid }
@@ -169,7 +158,7 @@ case "search":
             result.append(dict)
         }
     }
-    printJSONArray(result)
+    printJSON(result)
 
 case "create-event":
     guard args.count >= 5 else {
@@ -204,7 +193,7 @@ case "create-event":
 
     if args.count > 5 && !args[5].isEmpty {
         let calName = args[5]
-        if let cal = store.calendars(for: .event).first(where: { $0.title == calName }) {
+        if let cal = findCalendar(named: calName) {
             event.calendar = cal
         } else {
             printJSON(["error": "Calendar not found"])
@@ -269,19 +258,18 @@ case "get-event":
         exit(1)
     }
     let includeNotes = args.count >= 4 && args[3] == "true"
-    let isoFormatter = ISO8601DateFormatter()
     var dict: [String: Any] = [
         "uid": event.eventIdentifier ?? "",
         "title": event.title ?? "",
-        "start": isoFormatter.string(from: event.startDate),
-        "end": isoFormatter.string(from: event.endDate),
+        "start": outputFormatter.string(from: event.startDate),
+        "end": outputFormatter.string(from: event.endDate),
         "allDay": event.isAllDay,
         "calendar": event.calendar?.title ?? "Unknown"
     ]
     if let location = event.location { dict["location"] = location }
     if includeNotes, let notes = event.notes { dict["notes"] = notes }
     if let url = event.url { dict["url"] = url.absoluteString }
-    if event.hasRecurrenceRules, let _ = event.recurrenceRules {
+    if event.hasRecurrenceRules {
         dict["hasRecurrence"] = true
     }
     printJSON(dict)
