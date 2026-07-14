@@ -23,12 +23,38 @@ func findCalendar(named name: String) -> EKCalendar? {
     store.calendars(for: .event).first(where: { $0.title == name })
 }
 
+// EventKit grants are attributed to the host process (Terminal, iTerm, Cowork...).
+// A host that never requests access is never listed in System Settings > Privacy &
+// Security > Calendars, so it cannot be granted there by hand — reads come back empty
+// and writes fail. Requesting here is what makes the prompt (and the entry) appear.
+func requireCalendarAccess() {
+    let semaphore = DispatchSemaphore(value: 0)
+    var granted = false
+    var failure: Error?
+    store.requestFullAccessToEvents { ok, error in
+        granted = ok
+        failure = error
+        semaphore.signal()
+    }
+    semaphore.wait()
+
+    guard granted else {
+        let detail = failure.map { ": \($0.localizedDescription)" } ?? ""
+        fputs(
+            "{\"error\":\"Calendar access denied for the host app\(detail). Approve the prompt, or enable this app under System Settings > Privacy & Security > Calendars.\"}\n",
+            stderr)
+        exit(1)
+    }
+}
+
 guard args.count >= 2 else {
     printJSON(["error": "Usage: calendar-reader <command> [args...]"])
     exit(1)
 }
 
 let command = args[1]
+
+requireCalendarAccess()
 
 switch command {
 case "list-calendars":
