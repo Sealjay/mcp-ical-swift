@@ -1,6 +1,6 @@
 {
   "name": "mcp-ical-swift",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "type": "module",
   "description": "MCP server for Apple Calendar using a compiled Swift EventKit binary — bypasses macOS Sequoia TCC restrictions that block headless processes from accessing calendars",
   "author": "Chris Lloyd-Jones <chris@sealjay.com>",
@@ -20,7 +20,7 @@
     "claude"
   ],
   "scripts": {
-    "build": "swiftc -o bin/calendar-reader src/calendar-reader.swift -framework EventKit",
+    "build": "swiftc -o bin/calendar-reader src/calendar-reader.swift -framework EventKit -Xlinker -sectcreate -Xlinker __TEXT -Xlinker __info_plist -Xlinker src/Info.plist && codesign -f -s - bin/calendar-reader",
     "start": "bun run src/index.ts",
     "dev": "bun run --watch src/index.ts",
     "test": "bun test"

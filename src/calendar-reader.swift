@@ -1,5 +1,60 @@
 import EventKit
 import Foundation
+import MachO
+
+// --- TCC responsible-process disclaim -------------------------------------------------
+// EventKit attributes its access prompt to the *responsible* process: the GUI app at the
+// top of the launch chain. Under Cowork that is Claude.app, which ships no calendar
+// usage-description string, so macOS silently denies and never shows a prompt. We break
+// that inheritance — on first entry we re-spawn ourselves with the private
+// `responsibility_spawnattrs_setdisclaim` attribute (as used by LLDB and Qt Creator) set,
+// making the child its own responsible process. macOS then reads *our* embedded
+// NSCalendarsFullAccessUsageDescription and prompts as "mcp-ical-swift", whichever host
+// launched us — so one grant works in Cowork, Claude Code and the terminal alike.
+// ponytail: private libSystem symbol, dlsym'd and absence-tolerant; if Apple ever drops
+// it we fall through to the legacy inline path (host-attributed, exactly as before).
+func executablePath() -> String {
+    var size: UInt32 = 0
+    _ = _NSGetExecutablePath(nil, &size)
+    var buf = [CChar](repeating: 0, count: Int(size))
+    guard _NSGetExecutablePath(&buf, &size) == 0 else { return CommandLine.arguments[0] }
+    return String(cString: buf)
+}
+
+func disclaimAndReexecIfNeeded() {
+    // The re-spawned child carries this marker and runs the real work inline.
+    if ProcessInfo.processInfo.environment["ICAL_DISCLAIMED"] == "1" { return }
+
+    let handle = dlopen(nil, RTLD_LAZY)
+    guard let sym = dlsym(handle, "responsibility_spawnattrs_setdisclaim") else { return }
+    typealias DisclaimFn = @convention(c) (posix_spawnattr_t?, Int32) -> Int32
+    let setDisclaim = unsafeBitCast(sym, to: DisclaimFn.self)
+
+    var attr: posix_spawnattr_t?
+    guard posix_spawnattr_init(&attr) == 0 else { return }
+    defer { posix_spawnattr_destroy(&attr) }
+    guard setDisclaim(attr, 1) == 0 else { return }
+
+    var argv: [UnsafeMutablePointer<CChar>?] = CommandLine.arguments.map { strdup($0) }
+    argv.append(nil)
+    var env = ProcessInfo.processInfo.environment
+    env["ICAL_DISCLAIMED"] = "1"
+    var envp: [UnsafeMutablePointer<CChar>?] = env.map { strdup("\($0.key)=\($0.value)") }
+    envp.append(nil)
+
+    var pid: pid_t = 0
+    let rc = posix_spawn(&pid, executablePath(), nil, &attr, argv, envp)
+    for p in argv where p != nil { free(p) }
+    for p in envp where p != nil { free(p) }
+    guard rc == 0 else { return }  // spawn failed → fall through to the legacy inline path
+
+    var status: Int32 = 0
+    while waitpid(pid, &status, 0) == -1 && errno == EINTR {}
+    if (status & 0x7f) == 0 { exit((status >> 8) & 0xff) }  // WIFEXITED → propagate exit code
+    exit(128 + (status & 0x7f))                             // killed by signal
+}
+
+disclaimAndReexecIfNeeded()
 
 let store = EKEventStore()
 let args = CommandLine.arguments

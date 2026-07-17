@@ -42,7 +42,7 @@ function run(command: string, ...args: string[]): string {
 
 const server = new McpServer({
 	name: "ical",
-	version: "1.0.0",
+	version: "1.1.0",
 });
 
 server.registerTool(
