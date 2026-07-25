@@ -27,13 +27,17 @@ func disclaimAndReexecIfNeeded() {
 
     let handle = dlopen(nil, RTLD_LAZY)
     guard let sym = dlsym(handle, "responsibility_spawnattrs_setdisclaim") else { return }
-    typealias DisclaimFn = @convention(c) (posix_spawnattr_t?, Int32) -> Int32
+    // C signature is `int (posix_spawnattr_t *attr, int disclaim)`, and posix_spawnattr_t is
+    // itself a pointer typedef — so this takes a pointer *to* the attr, not the attr. Passing
+    // the attr by value returns EINVAL and silently drops us onto the legacy path.
+    typealias DisclaimFn = @convention(c) (UnsafeMutablePointer<posix_spawnattr_t?>, Int32)
+        -> Int32
     let setDisclaim = unsafeBitCast(sym, to: DisclaimFn.self)
 
     var attr: posix_spawnattr_t?
     guard posix_spawnattr_init(&attr) == 0 else { return }
     defer { posix_spawnattr_destroy(&attr) }
-    guard setDisclaim(attr, 1) == 0 else { return }
+    guard setDisclaim(&attr, 1) == 0 else { return }
 
     var argv: [UnsafeMutablePointer<CChar>?] = CommandLine.arguments.map { strdup($0) }
     argv.append(nil)
@@ -78,10 +82,11 @@ func findCalendar(named name: String) -> EKCalendar? {
     store.calendars(for: .event).first(where: { $0.title == name })
 }
 
-// EventKit grants are attributed to the host process (Terminal, iTerm, Cowork...).
-// A host that never requests access is never listed in System Settings > Privacy &
-// Security > Calendars, so it cannot be granted there by hand — reads come back empty
-// and writes fail. Requesting here is what makes the prompt (and the entry) appear.
+// Requesting here is what makes the prompt (and the System Settings entry) appear.
+// Thanks to the disclaim above we are our own responsible process, so the grant lands on
+// this binary rather than on the host app — which is the only way it can be granted at all,
+// since a host like Cowork ships no calendar usage string and the Calendars pane in System
+// Settings has no way to add an app by hand.
 func requireCalendarAccess() {
     let semaphore = DispatchSemaphore(value: 0)
     var granted = false
@@ -96,7 +101,7 @@ func requireCalendarAccess() {
     guard granted else {
         let detail = failure.map { ": \($0.localizedDescription)" } ?? ""
         fputs(
-            "{\"error\":\"Calendar access denied for the host app\(detail). Approve the prompt, or enable this app under System Settings > Privacy & Security > Calendars.\"}\n",
+            "{\"error\":\"Calendar access not granted\(detail). Run 'bun run grant' in the mcp-ical-swift repo and approve the macOS prompt — it cannot be approved from inside an MCP client.\"}\n",
             stderr)
         exit(1)
     }
@@ -377,3 +382,4 @@ default:
     printJSON(["error": "Unknown command. Use list-calendars, list-events, search, create-event, update-event, get-event, delete-event"])
     exit(1)
 }
+

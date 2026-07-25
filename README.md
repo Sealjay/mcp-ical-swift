@@ -172,6 +172,9 @@ mcp-ical-swift/
   src/
     index.ts              # MCP server entry point, tool definitions, Zod schemas
     calendar-reader.swift # Swift EventKit binary source
+    Info.plist            # Embedded in the binary; carries the Calendar usage strings
+  scripts/
+    grant.sh              # One-off Calendar TCC grant; chained off `bun run build`
   bin/
     calendar-reader       # Compiled binary (gitignored)
   package.json
@@ -187,7 +190,13 @@ On macOS Sequoia and later, headless processes cannot obtain Calendar access thr
 
 A `swiftc`-compiled binary produces an Apple-signed Mach-O executable that inherits Calendar TCC from the system Swift toolchain. When spawned via `execFileSync`, EventKit reports `authorizationStatus = .fullAccess`.
 
-Under Claude Cowork, EventKit attributes the access prompt to Claude.app — the GUI process at the top of the launch chain — which ships no calendar usage-description string, so macOS silently denies access without ever showing a prompt. To fix this, the binary re-spawns itself on startup with the private `responsibility_spawnattrs_setdisclaim` attribute (the same technique LLDB and Qt Creator use), making the child its own responsible process so macOS reads the embedded `src/Info.plist` usage strings instead of the host app's. If the private symbol is unavailable or the spawn fails, it falls back silently to the legacy behaviour — no functional regression.
+Under Claude Cowork, EventKit attributes the access prompt to Claude.app — the GUI process at the top of the launch chain — which ships no calendar usage-description string, so macOS silently denies access without ever showing a prompt. Nor can it be granted by hand: the Calendars pane in System Settings lists only apps that have successfully requested access, and unlike Full Disk Access it has no "+" button. `tccutil` has no grant verb, and direct TCC database edits are rejected. The fix therefore has to live here, not in the host app.
+
+The binary re-spawns itself on startup with the private `responsibility_spawnattrs_setdisclaim` attribute (the same technique LLDB and Qt Creator use), making the child its own responsible process so macOS reads the embedded `src/Info.plist` usage strings instead of the host app's. If the private symbol is unavailable or the spawn fails, it falls back silently to the legacy behaviour — no functional regression.
+
+Note the signature this expects: `responsibility_spawnattrs_setdisclaim` takes a `posix_spawnattr_t *`, and `posix_spawnattr_t` is itself a pointer typedef, so it must be passed `&attr` rather than `attr`. Passing the attribute by value returns `EINVAL` (22) and drops silently onto the legacy path — which looks like the fix working everywhere the host happens to have Calendar access, and failing only under Cowork.
+
+Because the binary is ad-hoc signed, TCC pins the grant to its path and cdhash. In practice this survives rebuilds: TCC re-pins the entry to the new cdhash on the next run without re-prompting. What it cannot do is create the entry in the first place from inside an MCP client — hence `bun run grant`.
 
 ## Tools
 
@@ -225,22 +234,36 @@ See [`SECURITY.md`](SECURITY.md) for how to report vulnerabilities.
 - **macOS only** — requires EventKit and the Swift toolchain.
 - **Synchronous execution** — the Swift binary is called once per tool invocation, not suited for high-throughput use.
 - **Single-instance recurring events** — modifications apply to the individual occurrence only (`.thisEvent` span), not the series.
-- **TCC dependency** — Calendar access depends on macOS granting permission to the compiled binary.
+- **TCC dependency** — Calendar access depends on macOS granting permission to the compiled binary, which must be done once from a terminal (`bun run grant`); it cannot be approved from inside an MCP client.
 
 ## Troubleshooting
 
 ### "Calendar access is not granted"
 
-The compiled binary needs to be run at least once from a context that has Calendar TCC. Build and test:
+The grant has to be established once from a terminal, where the consent prompt can actually be answered:
 
 ```bash
-bun run build
+bun run grant
+```
+
+Approve the macOS prompt for **calendar-reader**. `bun run build` chains this automatically, so a fresh clone is granted at build time. It is a one-off — TCC re-pins the grant across rebuilds by itself.
+
+You cannot approve this from inside an MCP client. Under Claude Cowork the request is attributed to Claude.app, which has no calendar usage-description string, so macOS denies it without showing anything, and the Calendars pane offers no way to add it by hand.
+
+To verify:
+
+```bash
 bin/calendar-reader list-events $(date +%Y-%m-%d)
 ```
 
-If this returns events, the binary has Calendar access. If not, try running from Terminal.app (which typically has Calendar TCC granted).
+If no prompt ever appears, a stale entry may be suppressing it:
 
-**Under Claude Cowork specifically**, this used to fail silently with no prompt at all — EventKit attributed the request to Claude.app, which has no calendar usage-description string, so macOS denied it without asking. The binary now disclaims responsibility and prompts under its own identity instead (see [Why a compiled Swift binary?](#why-a-compiled-swift-binary)); rebuild (`bun run build`) if you're on an older binary and still see silent denials.
+```bash
+tccutil reset Calendar com.sealjay.mcp-ical-swift.calendar-reader
+bun run grant
+```
+
+If you are on a binary built before the disclaim fix, rebuild — earlier builds passed the spawn attribute by value, which silently disabled the disclaim and left Cowork failing while every other host worked.
 
 ### Events are empty
 
