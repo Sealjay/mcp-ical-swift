@@ -30,15 +30,20 @@ function run(command: string, ...args: string[]): string {
 			timeout: 15000,
 		}).trim();
 	} catch (e: unknown) {
-		const err = e as { stderr?: string; message?: string };
+		// The binary prints usage/validation errors as JSON on stdout, access errors on stderr.
+		const err = e as { stdout?: string; stderr?: string; message?: string };
 		const msg = (
-			err.stderr ||
+			err.stdout?.trim() ||
+			err.stderr?.trim() ||
 			err.message ||
 			"calendar operation failed"
 		).replace(/\/[\w/.-]+/g, "[path]");
 		throw new Error(msg);
 	}
 }
+
+// Canonical UTC for the binary; JS Date reads offset-less datetimes as local time.
+const toUTC = (s: string) => new Date(s).toISOString();
 
 const server = new McpServer({
 	name: "ical",
@@ -226,8 +231,8 @@ server.registerTool(
 					text: run(
 						"create-event",
 						title,
-						start,
-						end,
+						toUTC(start),
+						toUTC(end),
 						calendar ?? "",
 						location ?? "",
 						notes ?? "",
@@ -301,8 +306,8 @@ server.registerTool(
 						"update-event",
 						event_id,
 						title ?? "",
-						start ?? "",
-						end ?? "",
+						start ? toUTC(start) : "",
+						end ? toUTC(end) : "",
 						location ?? "",
 						notes ?? "",
 					),

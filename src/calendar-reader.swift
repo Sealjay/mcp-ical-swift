@@ -64,6 +64,19 @@ let store = EKEventStore()
 let args = CommandLine.arguments
 let outputFormatter = ISO8601DateFormatter()
 
+let isoFractional = ISO8601DateFormatter()
+isoFractional.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+let isoOffset = ISO8601DateFormatter()
+isoOffset.formatOptions = [.withInternetDateTime]
+// No offset → local time, matching the tool docs (ISO8601DateFormatter defaults to GMT).
+let isoLocal = ISO8601DateFormatter()
+isoLocal.formatOptions = [.withFullDate, .withTime, .withColonSeparatorInTime]
+isoLocal.timeZone = .current
+
+func parseDate(_ s: String) -> Date? {
+    isoFractional.date(from: s) ?? isoOffset.date(from: s) ?? isoLocal.date(from: s)
+}
+
 func printJSON(_ value: Any) {
     do {
         let data = try JSONSerialization.data(withJSONObject: value)
@@ -252,16 +265,6 @@ case "create-event":
         exit(1)
     }
     let title = args[2]
-    let isoF = ISO8601DateFormatter()
-    isoF.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
-    let isoF2 = ISO8601DateFormatter()
-    isoF2.formatOptions = [.withInternetDateTime]
-    let isoF3 = ISO8601DateFormatter()
-    isoF3.formatOptions = [.withFullDate, .withTime, .withColonSeparatorInTime]
-
-    func parseDate(_ s: String) -> Date? {
-        return isoF.date(from: s) ?? isoF2.date(from: s) ?? isoF3.date(from: s)
-    }
 
     guard let startDate = parseDate(args[3]) else {
         printJSON(["error": "Invalid start date. Use ISO 8601 format"])
@@ -316,12 +319,21 @@ case "update-event":
         exit(1)
     }
 
-    let isoF = ISO8601DateFormatter()
-    isoF.formatOptions = [.withInternetDateTime]
-
     if args.count > 3 && !args[3].isEmpty { event.title = args[3] }
-    if args.count > 4 && !args[4].isEmpty { if let d = isoF.date(from: args[4]) { event.startDate = d } }
-    if args.count > 5 && !args[5].isEmpty { if let d = isoF.date(from: args[5]) { event.endDate = d } }
+    if args.count > 4 && !args[4].isEmpty {
+        guard let d = parseDate(args[4]) else {
+            printJSON(["error": "Invalid start date. Use ISO 8601 format"])
+            exit(1)
+        }
+        event.startDate = d
+    }
+    if args.count > 5 && !args[5].isEmpty {
+        guard let d = parseDate(args[5]) else {
+            printJSON(["error": "Invalid end date. Use ISO 8601 format"])
+            exit(1)
+        }
+        event.endDate = d
+    }
     if args.count > 6 && !args[6].isEmpty { event.location = args[6] }
     if args.count > 7 && !args[7].isEmpty { event.notes = args[7] }
 
