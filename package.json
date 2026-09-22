@@ -1,6 +1,6 @@
 {
   "name": "mcp-ical-swift",
-  "version": "0.2.0",
+  "version": "0.2.1",
   "type": "module",
   "description": "MCP server for Apple Calendar using a compiled Swift EventKit binary — bypasses macOS Sequoia TCC restrictions that block headless processes from accessing calendars",
   "author": "Chris Lloyd-Jones <chris@sealjay.com>",
