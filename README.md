@@ -149,7 +149,7 @@ Or in your MCP client config:
 
 | Component | Description |
 |-----------|-------------|
-| MCP server | Bun/TypeScript, stdio transport, Zod input validation |
+| MCP server | Bun/TypeScript, MCP TypeScript SDK 1.32, stdio transport, Zod 4 input validation |
 | Swift binary | Compiled with `swiftc`, accesses EventKit framework |
 | Communication | `execFileSync` with array args (no shell interpolation) |
 | Output | JSON via `JSONSerialization` (prevents injection from user strings) |

@@ -3,7 +3,7 @@ import { z } from "zod";
 
 // --- Date/datetime validation ---
 describe("date schema", () => {
-	const schema = z.string().max(30).date();
+	const schema = z.iso.date().max(30);
 	test("accepts valid YYYY-MM-DD dates", () => {
 		expect(schema.safeParse("2026-01-01").success).toBe(true);
 		expect(schema.safeParse("2026-12-31").success).toBe(true);
@@ -17,10 +17,7 @@ describe("date schema", () => {
 });
 
 describe("datetime schema", () => {
-	const schema = z
-		.string()
-		.max(30)
-		.datetime({ offset: true, local: true });
+	const schema = z.iso.datetime({ offset: true, local: true }).max(30);
 	test("accepts valid ISO 8601 datetimes", () => {
 		expect(schema.safeParse("2026-05-01T10:00:00Z").success).toBe(true);
 		expect(schema.safeParse("2026-05-01T10:00:00+01:00").success).toBe(true);
