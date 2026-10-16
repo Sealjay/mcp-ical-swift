@@ -3,7 +3,7 @@
 ## Architecture
 
 Two-component system:
-- **TypeScript MCP server** (`src/index.ts`) -- Bun runtime, uses `@modelcontextprotocol/sdk`, communicates over stdio, validates inputs with Zod, calls Swift binary via `execFileSync` with array args (not shell)
+- **TypeScript MCP server** (`src/index.ts`) -- Bun runtime, uses `@modelcontextprotocol/sdk`, communicates over stdio, validates inputs with Zod 4, calls Swift binary via `execFileSync` with array args (not shell)
 - **Swift binary** (`src/calendar-reader.swift`) -- compiled with `swiftc`, accesses Apple Calendar via EventKit framework, outputs JSON to stdout
 
 Data flow: MCP Client -> stdio -> Bun MCP server -> execFileSync -> compiled Swift binary -> EventKit -> Apple Calendar

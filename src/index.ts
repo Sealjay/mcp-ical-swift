@@ -4,6 +4,7 @@ import { resolve } from "node:path";
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
 import { z } from "zod";
+import pkg from "../package.json";
 
 const BINARY = resolve(import.meta.dir, "../bin/calendar-reader");
 
@@ -47,7 +48,7 @@ const toUTC = (s: string) => new Date(s).toISOString();
 
 const server = new McpServer({
 	name: "ical",
-	version: "1.1.1",
+	version: pkg.version,
 });
 
 server.registerTool(
@@ -68,17 +69,15 @@ server.registerTool(
 		description:
 			"List calendar events within an inclusive date range (capped at 90 days). Returns a JSON array of `{title, start, end, allDay, calendar, uid, location?, notes?}`; use `ical__search_events` for keyword queries and `ical__get_event` for full details on one event. Read-only; requires macOS Calendar access.",
 		inputSchema: {
-			start_date: z
-				.string()
-				.max(30)
+			start_date: z.iso
 				.date()
+				.max(30)
 				.describe(
 					"Inclusive start date in YYYY-MM-DD; interpreted in the system's local timezone.",
 				),
-			end_date: z
-				.string()
-				.max(30)
+			end_date: z.iso
 				.date()
+				.max(30)
 				.optional()
 				.describe(
 					"Inclusive end date in YYYY-MM-DD; defaults to start_date. The full range is capped at 90 days.",
@@ -178,17 +177,15 @@ server.registerTool(
 			"Create a new calendar event in EventKit; visible in Apple Calendar.app and synced via iCloud if the chosen calendar is iCloud-backed. Returns `{uid, title, status: 'created'}`; reversible via `ical__delete_event` using the returned UID. Requires `ICAL_ALLOW_WRITE=true` and macOS Calendar access for the parent process.",
 		inputSchema: {
 			title: z.string().max(500).describe("Event title."),
-			start: z
-				.string()
-				.max(30)
+			start: z.iso
 				.datetime({ offset: true, local: true })
+				.max(30)
 				.describe(
 					"Start datetime in ISO 8601 (e.g. `2026-05-01T10:00:00Z`); naive datetimes without an offset are interpreted in the system's local timezone.",
 				),
-			end: z
-				.string()
-				.max(30)
+			end: z.iso
 				.datetime({ offset: true, local: true })
+				.max(30)
 				.describe(
 					"End datetime in ISO 8601; same timezone semantics as `start`.",
 				),
@@ -262,18 +259,16 @@ server.registerTool(
 				.max(500)
 				.optional()
 				.describe("New title; omit to leave unchanged."),
-			start: z
-				.string()
-				.max(30)
+			start: z.iso
 				.datetime({ offset: true, local: true })
+				.max(30)
 				.optional()
 				.describe(
 					"New start datetime in ISO 8601; naive datetimes are interpreted in the system's local timezone. Omit to leave unchanged.",
 				),
-			end: z
-				.string()
-				.max(30)
+			end: z.iso
 				.datetime({ offset: true, local: true })
+				.max(30)
 				.optional()
 				.describe(
 					"New end datetime in ISO 8601; same timezone semantics as `start`. Omit to leave unchanged.",
