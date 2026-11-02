@@ -5,7 +5,7 @@
 If you discover a security vulnerability in this project, please report it privately via
 [GitHub Security Advisories](https://github.com/Sealjay/mcp-ical-swift/security/advisories/new).
 
-Do not open a public issue for security reports. We aim to acknowledge reports within 48 hours
+Do not open a public issue for security reports. We aim to acknowledge reports as time allows
 and will work with you on a fix before any public disclosure.
 
 ## Scope
